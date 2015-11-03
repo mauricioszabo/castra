@@ -119,13 +119,20 @@
     (let [live?  (not *validate-only*)
           prom   (.Deferred js/jQuery)
           unload #(vec (remove (partial = prom) %))]
-      (when live? (swap! loading (fnil conj []) prom))
+      (when live? 
+        (if (fn? loading)
+          (loading prom)
+          (swap! loading (fnil conj []) prom)))
       (let [prom' (-> (ajax (with-default-opts opts) `[~endpoint ~@args])
                       (.done   #(do (when live?
-                                      (reset! error nil)
-                                      (reset! state %))
+                                      (if-not (fn? error) (reset! error nil))
+                                      (if (fn? state) (state %) (reset! state %)))
                                     (.resolve prom %)))
-                      (.fail   #(do (when live? (reset! error %))
+                      (.fail   #(do (when live? 
+                                      (if (fn? error) (error %) (reset! error %)))
                                     (.reject prom %)))
-                      (.always #(when live? (swap! loading unload))))]
+                      (.always #(when live? 
+                                  (if (fn? loading)
+                                    (loading unload)
+                                    (swap! loading unload)))))]
         (doto prom (aset "xhr" (aget prom' "xhr")))))))
